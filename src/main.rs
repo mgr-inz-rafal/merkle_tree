@@ -22,6 +22,12 @@ impl<T> Node<T> {
     }
 }
 
+impl<T> From<T> for Node<T> {
+    fn from(value: T) -> Self {
+        Node::new(value)
+    }
+}
+
 impl<T: Display> fmt::Display for Node<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}", self.data, if self.is_fake { '-' } else { ' ' })?;
@@ -34,13 +40,21 @@ struct MerkleTree<T: Default> {
 }
 
 impl<T: Default> MerkleTree<T> {
-    pub fn new(data: T) -> Self {
+    pub fn _new(data: T) -> Self {
         Self {
             nodes: vec![Node::new_fake(T::default()), Node::new(data)],
         }
     }
 
-    pub fn add(&mut self, node: Node<T>) {
+    pub fn from_iter(i: impl IntoIterator<Item = T>) -> Self {
+        Self {
+            nodes: std::iter::once(Node::new_fake(T::default()))
+                .chain(i.into_iter().map(|v| Node::new(v)))
+                .collect(),
+        }
+    }
+
+    pub fn _add(&mut self, node: Node<T>) {
         self.nodes.push(node)
     }
 
@@ -91,17 +105,7 @@ fn main() {
     //      D      E      F      G        level 1
     //    H   I  J  .   .   .  .   .      level 0
 
-    let mut mt: MerkleTree<char> = MerkleTree::new('A');
-    mt.add(Node::new('B'));
-    mt.add(Node::new('C'));
-    mt.add(Node::new('D'));
-    mt.add(Node::new('E'));
-    mt.add(Node::new('F'));
-    mt.add(Node::new('G'));
-    mt.add(Node::new('H'));
-    mt.add(Node::new('I'));
-    mt.add(Node::new('J'));
-
+    let mut mt: MerkleTree<char> = MerkleTree::from_iter("ABCDEFGHIJ".chars());
     println!("{}", mt);
 
     for i in 1..mt.len() {
@@ -113,36 +117,18 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use crate::{MerkleTree, Node};
+    use crate::MerkleTree;
 
     #[test]
     fn should_calculate_height() {
-        let mut mt: MerkleTree = MerkleTree::new('A');
-        mt.add(Node::new('B'));
-        mt.add(Node::new('C'));
-        mt.add(Node::new('D'));
-        mt.add(Node::new('E'));
-        mt.add(Node::new('F'));
-        mt.add(Node::new('G'));
-        mt.add(Node::new('H'));
-        mt.add(Node::new('I'));
-        mt.add(Node::new('J'));
+        let mt: MerkleTree<char> = MerkleTree::from_iter("ABCDEFGHIJ".chars());
 
         assert_eq!(mt.height(), 3)
     }
 
     #[test]
     fn should_calculate_level_of_item() {
-        let mut mt: MerkleTree = MerkleTree::new('A');
-        mt.add(Node::new('B'));
-        mt.add(Node::new('C'));
-        mt.add(Node::new('D'));
-        mt.add(Node::new('E'));
-        mt.add(Node::new('F'));
-        mt.add(Node::new('G'));
-        mt.add(Node::new('H'));
-        mt.add(Node::new('I'));
-        mt.add(Node::new('J'));
+        let mt: MerkleTree<char> = MerkleTree::from_iter("ABCDEFGHIJ".chars());
 
         assert_eq!(mt.level_of(1), 3);
         assert_eq!(mt.level_of(2), 2);
