@@ -105,7 +105,7 @@ fn main() {
     //      D      E      F      G        level 1
     //    H   I  J  .   .   .  .   .      level 0
 
-    let mut mt: MerkleTree<char> = MerkleTree::from_iter("ABCDEFGHIJ".chars());
+    let mut mt = MerkleTree::from_iter("ABCDEFGHIJ".chars());
     println!("{}", mt);
 
     for i in 1..mt.len() {
@@ -121,14 +121,14 @@ mod tests {
 
     #[test]
     fn should_calculate_height() {
-        let mt: MerkleTree<char> = MerkleTree::from_iter("ABCDEFGHIJ".chars());
+        let mt = MerkleTree::from_iter("ABCDEFGHIJ".chars());
 
         assert_eq!(mt.height(), 3)
     }
 
     #[test]
     fn should_calculate_level_of_item() {
-        let mt: MerkleTree<char> = MerkleTree::from_iter("ABCDEFGHIJ".chars());
+        let mt = MerkleTree::from_iter("ABCDEFGHIJ".chars());
 
         assert_eq!(mt.level_of(1), 3);
         assert_eq!(mt.level_of(2), 2);
