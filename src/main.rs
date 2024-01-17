@@ -1,20 +1,20 @@
 use core::fmt;
-use std::fmt::write;
+use std::fmt::Display;
 
-struct Node {
+struct Node<T> {
     is_fake: bool,
-    data: char,
+    data: T,
 }
 
-impl Node {
-    fn new(data: char) -> Self {
+impl<T> Node<T> {
+    fn new(data: T) -> Self {
         Self {
             is_fake: false,
             data,
         }
     }
 
-    fn new_fake(data: char) -> Self {
+    fn new_fake(data: T) -> Self {
         Self {
             is_fake: true,
             data,
@@ -22,25 +22,25 @@ impl Node {
     }
 }
 
-impl fmt::Display for Node {
+impl<T: Display> fmt::Display for Node<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}", self.data, if self.is_fake { '-' } else { ' ' })?;
         Ok(())
     }
 }
 
-struct MerkleTree {
-    nodes: Vec<Node>,
+struct MerkleTree<T: Default> {
+    nodes: Vec<Node<T>>,
 }
 
-impl MerkleTree {
-    pub fn new(data: char) -> Self {
+impl<T: Default> MerkleTree<T> {
+    pub fn new(data: T) -> Self {
         Self {
-            nodes: vec![Node::new_fake('X'), Node::new(data)],
+            nodes: vec![Node::new_fake(T::default()), Node::new(data)],
         }
     }
 
-    pub fn add(&mut self, node: Node) {
+    pub fn add(&mut self, node: Node<T>) {
         self.nodes.push(node)
     }
 
@@ -56,12 +56,15 @@ impl MerkleTree {
         self.nodes.len()
     }
 
-    pub fn node(&self, i: usize) -> Option<&Node> {
+    pub fn node(&self, i: usize) -> Option<&Node<T>> {
         self.nodes.get(i)
     }
 }
 
-impl fmt::Display for MerkleTree {
+impl<T> fmt::Display for MerkleTree<T>
+where
+    T: Default + Display,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
@@ -88,7 +91,7 @@ fn main() {
     //      D      E      F      G        level 1
     //    H   I  J  .   .   .  .   .      level 0
 
-    let mut mt: MerkleTree = MerkleTree::new('A');
+    let mut mt: MerkleTree<char> = MerkleTree::new('A');
     mt.add(Node::new('B'));
     mt.add(Node::new('C'));
     mt.add(Node::new('D'));
