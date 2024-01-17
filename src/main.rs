@@ -77,7 +77,7 @@ where
             let level_of = self.level_of(i);
             if current_level != level_of {
                 current_level = level_of;
-                writeln!(f, "")?;
+                writeln!(f)?;
             }
             write!(f, "{}", n)?;
         }
