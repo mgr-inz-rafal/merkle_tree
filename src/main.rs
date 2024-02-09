@@ -32,20 +32,29 @@ impl MerkleTree {
         let mut hasher = DefaultHasher::new();
         item.hash(&mut hasher);
         let my_hash = hasher.finish().to_string();
-
         let i = index + self.len();
         self.hashes[i] = my_hash.clone();
 
+        self.hash_recursive(i);
+    }
+
+    fn hash_recursive(&mut self, i: usize) {
+        let current_hash = self.hashes[i].clone();
         let sibling = sibling_index(i);
         let sibling_hash = &self.hashes[sibling];
 
-        let concat_hash = format!("{}{}", my_hash, sibling_hash);
+        let concat_hash = format!("{}{}", current_hash, sibling_hash);
         let mut hasher = DefaultHasher::new();
         concat_hash.hash(&mut hasher);
         let parent_hash = hasher.finish().to_string();
 
         let parent = parent_index(i);
         self.hashes[parent] = parent_hash;
+
+        if parent == 1 {
+            return;
+        }
+        self.hash_recursive(parent)
     }
 }
 
@@ -83,7 +92,10 @@ fn main() {
 
     let mut mt = MerkleTree::new(4);
 
-    mt.set_at(1, 'A');
-
+    mt.set_at(0, 'A');
+    dbg!(&mt);
+    mt.set_at(3, 'D');
+    dbg!(&mt);
+    mt.set_at(2, 'C');
     dbg!(&mt);
 }
