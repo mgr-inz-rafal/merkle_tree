@@ -6,7 +6,7 @@ use std::{
 
 #[derive(Debug)]
 struct MerkleTree {
-    hashes: Vec<String>,
+    nodes: Vec<String>,
 }
 
 impl MerkleTree {
@@ -17,44 +17,62 @@ impl MerkleTree {
         );
 
         Self {
-            hashes: vec!["-".to_string(); leaf_count * 2],
+            nodes: vec!["-".to_string(); leaf_count * 2],
         }
     }
 
     fn len(&self) -> usize {
-        self.hashes.len() / 2
+        self.nodes.len() / 2
     }
 
-    fn set_at<T>(&mut self, index: usize, item: T)
+    fn set_at<T>(&mut self, item_index: usize, item: T)
     where
         T: Hash,
     {
         let mut hasher = DefaultHasher::new();
         item.hash(&mut hasher);
         let my_hash = hasher.finish().to_string();
-        let i = index + self.len();
-        self.hashes[i] = my_hash.clone();
+        let node_index = item_index + self.len();
+        self.nodes[node_index] = my_hash.clone();
 
-        self.hash_recursive(i);
+        self.hash_recursive(node_index);
     }
 
-    fn hash_recursive(&mut self, i: usize) {
-        let current_hash = self.hashes[i].clone();
-        let sibling = sibling_index(i);
-        let sibling_hash = &self.hashes[sibling];
+    // TODO: Add NodeIndex type
+    fn hash_recursive(&mut self, node_index: usize) {
+        let current_hash = self.nodes[node_index].clone();
+        let sibling = sibling_index(node_index);
+        let sibling_hash = &self.nodes[sibling];
 
         let concat_hash = format!("{}{}", current_hash, sibling_hash);
         let mut hasher = DefaultHasher::new();
         concat_hash.hash(&mut hasher);
         let parent_hash = hasher.finish().to_string();
 
-        let parent = parent_index(i);
-        self.hashes[parent] = parent_hash;
+        let parent = parent_index(node_index);
+        self.nodes[parent] = parent_hash;
 
         if parent == 1 {
             return;
         }
         self.hash_recursive(parent)
+    }
+
+    fn proof(&self, item_index: usize) -> Vec<ProofStep> {
+        let mut proof = vec![];
+        let node_index = item_index + self.len();
+        self.proof_recursive(node_index, &mut proof);
+        proof
+    }
+
+    fn proof_recursive(&self, node_index: usize, proof: &mut Vec<ProofStep>) {
+        if node_index == 1 {
+            return;
+        }
+        proof.push(ProofStep {
+            hash: self.nodes[sibling_index(node_index)].clone(),
+        });
+        self.proof_recursive(parent_index(node_index), proof)
     }
 }
 
@@ -66,20 +84,29 @@ fn is_power_of_two(n: usize) -> bool {
     }
 }
 
-fn parent_index(index: usize) -> usize {
-    if index % 2 == 0 {
-        index / 2
+fn parent_index(node_index: usize) -> usize {
+    if is_left(node_index) {
+        node_index / 2
     } else {
-        (index - 1) / 2
+        (node_index - 1) / 2
     }
 }
 
-fn sibling_index(index: usize) -> usize {
-    if index % 2 == 0 {
-        index + 1
+fn sibling_index(node_index: usize) -> usize {
+    if is_left(node_index) {
+        node_index + 1
     } else {
-        index - 1
+        node_index - 1
     }
+}
+
+fn is_left(node_index: usize) -> bool {
+    node_index % 2 == 0
+}
+
+#[derive(Debug)]
+struct ProofStep {
+    hash: String,
 }
 
 fn main() {
@@ -93,9 +120,11 @@ fn main() {
     let mut mt = MerkleTree::new(4);
 
     mt.set_at(0, 'A');
-    dbg!(&mt);
+    mt.set_at(1, 'B');
+    mt.set_at(2, 'C');
     mt.set_at(3, 'D');
     dbg!(&mt);
-    mt.set_at(2, 'C');
-    dbg!(&mt);
+
+    let proof = mt.proof(2);
+    dbg!(&proof);
 }
