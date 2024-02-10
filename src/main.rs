@@ -21,6 +21,10 @@ impl MerkleTree {
         }
     }
 
+    fn root(&self) -> &String {
+        &self.nodes[1]
+    }
+
     fn len(&self) -> usize {
         self.nodes.len() / 2
     }
@@ -45,6 +49,8 @@ impl MerkleTree {
         let sibling_hash = &self.nodes[sibling];
 
         let concat_hash = format!("{}{}", current_hash, sibling_hash);
+
+        // TODO: Extract to simple "hash" function.
         let mut hasher = DefaultHasher::new();
         concat_hash.hash(&mut hasher);
         let parent_hash = hasher.finish().to_string();
@@ -71,6 +77,11 @@ impl MerkleTree {
         }
         proof.push(ProofStep {
             hash: self.nodes[sibling_index(node_index)].clone(),
+            direction: if is_left(node_index) {
+                Direction::Left
+            } else {
+                Direction::Right
+            },
         });
         self.proof_recursive(parent_index(node_index), proof)
     }
@@ -107,6 +118,42 @@ fn is_left(node_index: usize) -> bool {
 #[derive(Debug)]
 struct ProofStep {
     hash: String,
+    direction: Direction,
+}
+
+#[derive(Debug)]
+enum Direction {
+    Left,
+    Right,
+}
+
+fn verify<T>(proof: &[ProofStep], item: T) -> String
+where
+    T: Hash,
+{
+    let mut hasher = DefaultHasher::new();
+    item.hash(&mut hasher);
+    let mut my_hash = hasher.finish().to_string();
+
+    for ProofStep { hash, direction } in proof {
+        match direction {
+            Direction::Right => {
+                let concat = format!("{}{}", my_hash, hash);
+
+                let mut hasher = DefaultHasher::new();
+                concat.hash(&mut hasher);
+                my_hash = hasher.finish().to_string();
+            }
+            Direction::Left => {
+                let concat = format!("{}{}", hash, my_hash);
+
+                let mut hasher = DefaultHasher::new();
+                concat.hash(&mut hasher);
+                my_hash = hasher.finish().to_string();
+            }
+        }
+    }
+    my_hash
 }
 
 fn main() {
@@ -127,4 +174,9 @@ fn main() {
 
     let proof = mt.proof(2);
     dbg!(&proof);
+
+    let expected_root = mt.root();
+    let actual_root = verify(&proof, 'C');
+
+    assert_eq!(expected_root, &actual_root)
 }
