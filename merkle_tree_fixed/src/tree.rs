@@ -83,7 +83,7 @@ where
         let node_index = self.to_node_index(item_index);
 
         let my_hash = (self.hasher)(item);
-        self.nodes.set_at(node_index, my_hash.as_slice());
+        self.nodes.set_at(node_index, &my_hash);
 
         self.hash_recursive(node_index);
     }
@@ -92,16 +92,20 @@ where
         NodeIndex::new(index + self.len())
     }
 
+    fn concat(one: &[u8], two: &[u8]) -> Vec<u8> {
+        one.iter().copied().chain(two.iter().copied()).collect()
+    }
+
     fn hash_recursive(&mut self, node_index: NodeIndex) {
         let current_hash = self.nodes.at(node_index);
         let sibling = Self::sibling_index(node_index);
         let sibling_hash = &self.nodes.at(sibling);
 
-        let concat = format!("{}{}", hex::encode(current_hash), hex::encode(sibling_hash));
-        let parent_hash = (self.hasher)(concat.as_bytes());
+        let concat = Self::concat(current_hash, sibling_hash);
+        let parent_hash = (self.hasher)(&concat);
 
         let parent = Self::parent_index(node_index);
-        self.nodes.set_at(parent, parent_hash.as_slice());
+        self.nodes.set_at(parent, &parent_hash);
 
         if parent.is_root() {
             return;
@@ -140,12 +144,12 @@ where
         for step in proof {
             match step.direction() {
                 Direction::Right => {
-                    let concat = format!("{}{}", hex::encode(my_hash), hex::encode(step.hash()));
-                    my_hash = (hasher)(concat.as_bytes());
+                    let concat = Self::concat(&my_hash, step.hash());
+                    my_hash = (hasher)(&concat);
                 }
                 Direction::Left => {
-                    let concat = format!("{}{}", hex::encode(step.hash()), hex::encode(my_hash));
-                    my_hash = (hasher)(concat.as_bytes());
+                    let concat = Self::concat(step.hash(), &my_hash);
+                    my_hash = (hasher)(&concat);
                 }
             }
         }
