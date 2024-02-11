@@ -71,7 +71,7 @@ where
         self.nodes.at(NodeIndex::new(1))
     }
 
-    pub fn len(&self) -> usize {
+    pub fn leaf_count(&self) -> usize {
         self.nodes.len() / 2
     }
 
@@ -89,7 +89,7 @@ where
     }
 
     fn to_node_index(&self, index: usize) -> NodeIndex {
-        NodeIndex::new(index + self.len())
+        NodeIndex::new(index + self.leaf_count())
     }
 
     fn concat(one: &[u8], two: &[u8]) -> Vec<u8> {
@@ -112,9 +112,12 @@ where
         }
         self.hash_recursive(parent)
     }
+    pub fn leaves(&self) -> impl Iterator<Item = &Vec<u8>> {
+        self.nodes.0.iter().skip(self.leaf_count())
+    }
 
     pub fn proof(&self, index: usize) -> Proof {
-        let mut proof = Proof::new(self.len() / 2);
+        let mut proof = Proof::new(self.leaf_count());
         let node_index = self.to_node_index(index);
         self.proof_recursive(node_index, &mut proof);
         proof

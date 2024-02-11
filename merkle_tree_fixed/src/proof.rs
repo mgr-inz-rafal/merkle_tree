@@ -24,11 +24,12 @@ impl ProofStep {
     }
 }
 
+#[derive(Debug)]
 pub struct Proof(Vec<ProofStep>);
 
 impl Proof {
-    pub(crate) fn new(length: usize) -> Self {
-        Self(Vec::with_capacity(length))
+    pub(crate) fn new(leaf_count: usize) -> Self {
+        Self(Vec::with_capacity(leaf_count.ilog2() as usize))
     }
 
     pub(crate) fn add_step(&mut self, step: ProofStep) {
