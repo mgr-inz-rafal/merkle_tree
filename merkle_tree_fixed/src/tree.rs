@@ -154,16 +154,11 @@ where
         let mut my_hash = (hasher)(item);
 
         for step in proof.iter() {
-            match step.direction() {
-                Direction::Right => {
-                    let concat = Self::concat(&my_hash, step.hash());
-                    my_hash = (hasher)(&concat);
-                }
-                Direction::Left => {
-                    let concat = Self::concat(step.hash(), &my_hash);
-                    my_hash = (hasher)(&concat);
-                }
-            }
+            let concat = match step.direction() {
+                Direction::Right => Self::concat(&my_hash, step.hash()),
+                Direction::Left => Self::concat(step.hash(), &my_hash),
+            };
+            my_hash = (hasher)(&concat);
         }
         my_hash
     }
