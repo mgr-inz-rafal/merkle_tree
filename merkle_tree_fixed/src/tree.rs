@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     node_index::NodeIndex,
-    proof::{Direction, ProofStep},
+    proof::{Direction, Proof, ProofStep},
 };
 
 #[derive(Debug)]
@@ -113,18 +113,19 @@ where
         self.hash_recursive(parent)
     }
 
-    pub fn proof(&self, index: usize) -> Vec<ProofStep> {
-        let mut proof = vec![];
+    pub fn proof(&self, index: usize) -> Proof {
+        let mut proof = Proof::new(self.len() / 2);
         let node_index = self.to_node_index(index);
         self.proof_recursive(node_index, &mut proof);
         proof
     }
 
-    fn proof_recursive(&self, node_index: NodeIndex, proof: &mut Vec<ProofStep>) {
+    fn proof_recursive(&self, node_index: NodeIndex, proof: &mut Proof) {
         if node_index.is_root() {
             return;
         }
-        proof.push(ProofStep::new(
+
+        proof.add_step(ProofStep::new(
             self.nodes.at(Self::sibling_index(node_index)).clone(),
             if Self::is_left(node_index) {
                 Direction::Left
@@ -132,16 +133,17 @@ where
                 Direction::Right
             },
         ));
+
         self.proof_recursive(Self::parent_index(node_index), proof)
     }
 
-    pub fn verify(proof: &[ProofStep], item: &[u8], hasher: Hasher) -> Vec<u8>
+    pub fn verify(proof: &Proof, item: &[u8], hasher: Hasher) -> Vec<u8>
     where
         Hasher: Fn(&[u8]) -> Vec<u8>,
     {
         let mut my_hash = (hasher)(item);
 
-        for step in proof {
+        for step in proof.iter() {
             match step.direction() {
                 Direction::Right => {
                     let concat = Self::concat(&my_hash, step.hash());

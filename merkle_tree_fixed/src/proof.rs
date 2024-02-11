@@ -1,4 +1,10 @@
 #[derive(Debug)]
+pub enum Direction {
+    Left,
+    Right,
+}
+
+#[derive(Debug)]
 pub struct ProofStep {
     hash: Vec<u8>,
     direction: Direction,
@@ -18,8 +24,18 @@ impl ProofStep {
     }
 }
 
-#[derive(Debug)]
-pub enum Direction {
-    Left,
-    Right,
+pub struct Proof(Vec<ProofStep>);
+
+impl Proof {
+    pub(crate) fn new(length: usize) -> Self {
+        Self(Vec::with_capacity(length))
+    }
+
+    pub(crate) fn add_step(&mut self, step: ProofStep) {
+        self.0.push(step)
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &ProofStep> {
+        self.0.iter()
+    }
 }
