@@ -7,32 +7,43 @@ use std::{
 use crate::proof::{Direction, ProofStep};
 
 #[derive(Debug)]
-pub struct MerkleTree {
-    nodes: Vec<String>,
+pub struct MerkleTree<Hasher>
+where
+    Hasher: Fn(&[u8]) -> Vec<u8>,
+{
+    nodes: Vec<Vec<u8>>,
+    hasher: Hasher,
 }
 
-impl MerkleTree {
-    pub fn new(leaf_count: usize) -> Self {
+impl<Hasher> MerkleTree<Hasher>
+where
+    Hasher: Fn(&[u8]) -> Vec<u8>,
+{
+    pub fn new(leaf_count: usize, hasher: Hasher) -> Self {
         assert!(
             Self::is_power_of_two(leaf_count),
             "leaf count should be a power of 2"
         );
 
         Self {
-            nodes: vec!["-".to_string(); leaf_count * 2],
+            nodes: vec![vec![]; leaf_count * 2],
+            hasher,
         }
     }
 
-    pub fn from_iter<T: Hash>(i: impl Iterator<Item = T>) -> Self {
+    pub fn from_iter<'a>(i: impl Iterator<Item = &'a [u8]>, hasher: Hasher) -> Self
+    where
+        Hasher: Fn(&[u8]) -> Vec<u8>,
+    {
         let all_items: Vec<_> = i.collect();
-        let mut mt = MerkleTree::new(all_items.len());
+        let mut mt = MerkleTree::new(all_items.len(), hasher);
         all_items.into_iter().enumerate().for_each(|(index, item)| {
             mt.set_at(index, item);
         });
         mt
     }
 
-    pub fn root(&self) -> &String {
+    pub fn root(&self) -> &Vec<u8> {
         &self.nodes[1]
     }
 
@@ -40,13 +51,8 @@ impl MerkleTree {
         self.nodes.len() / 2
     }
 
-    pub fn set_at<T>(&mut self, item_index: usize, item: T)
-    where
-        T: Hash,
-    {
-        let mut hasher = DefaultHasher::new();
-        item.hash(&mut hasher);
-        let my_hash = hasher.finish().to_string();
+    pub fn set_at(&mut self, item_index: usize, item: &[u8]) {
+        let my_hash = (self.hasher)(item);
         let node_index = item_index + self.len();
         self.nodes[node_index] = my_hash.clone();
 
@@ -59,12 +65,8 @@ impl MerkleTree {
         let sibling = Self::sibling_index(node_index);
         let sibling_hash = &self.nodes[sibling];
 
-        let concat_hash = format!("{}{}", current_hash, sibling_hash);
-
-        // TODO: Extract to simple "hash" function.
-        let mut hasher = DefaultHasher::new();
-        concat_hash.hash(&mut hasher);
-        let parent_hash = hasher.finish().to_string();
+        let concat = format!("{}{}", hex::encode(current_hash), hex::encode(sibling_hash));
+        let parent_hash = (self.hasher)(concat.as_bytes());
 
         let parent = Self::parent_index(node_index);
         self.nodes[parent] = parent_hash;
@@ -97,29 +99,21 @@ impl MerkleTree {
         self.proof_recursive(Self::parent_index(node_index), proof)
     }
 
-    pub fn verify<T>(proof: &[ProofStep], item: T) -> String
+    pub fn verify(proof: &[ProofStep], item: &[u8], hasher: Hasher) -> Vec<u8>
     where
-        T: Hash,
+        Hasher: Fn(&[u8]) -> Vec<u8>,
     {
-        let mut hasher = DefaultHasher::new();
-        item.hash(&mut hasher);
-        let mut my_hash = hasher.finish().to_string();
+        let mut my_hash = (hasher)(item);
 
         for step in proof {
             match step.direction() {
                 Direction::Right => {
-                    let concat = format!("{}{}", my_hash, step.hash());
-
-                    let mut hasher = DefaultHasher::new();
-                    concat.hash(&mut hasher);
-                    my_hash = hasher.finish().to_string();
+                    let concat = format!("{}{}", hex::encode(my_hash), hex::encode(step.hash()));
+                    my_hash = (hasher)(concat.as_bytes());
                 }
                 Direction::Left => {
-                    let concat = format!("{}{}", step.hash(), my_hash);
-
-                    let mut hasher = DefaultHasher::new();
-                    concat.hash(&mut hasher);
-                    my_hash = hasher.finish().to_string();
+                    let concat = format!("{}{}", hex::encode(step.hash()), hex::encode(my_hash));
+                    my_hash = (hasher)(concat.as_bytes());
                 }
             }
         }

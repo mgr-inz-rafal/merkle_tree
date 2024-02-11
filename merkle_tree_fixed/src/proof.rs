@@ -1,11 +1,11 @@
 #[derive(Debug)]
 pub struct ProofStep {
-    hash: String,
+    hash: Vec<u8>,
     direction: Direction,
 }
 
 impl ProofStep {
-    pub fn new(hash: String, direction: Direction) -> Self {
+    pub fn new(hash: Vec<u8>, direction: Direction) -> Self {
         Self { hash, direction }
     }
 
@@ -13,7 +13,7 @@ impl ProofStep {
         &self.direction
     }
 
-    pub fn hash(&self) -> &String {
+    pub fn hash(&self) -> &Vec<u8> {
         &self.hash
     }
 }
