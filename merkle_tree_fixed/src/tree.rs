@@ -1,17 +1,41 @@
-use std::{
-    collections::hash_map::DefaultHasher,
-    fmt::Debug,
-    hash::{Hash, Hasher},
+use std::fmt::Debug;
+
+use crate::{
+    node_index::NodeIndex,
+    proof::{Direction, ProofStep},
 };
 
-use crate::proof::{Direction, ProofStep};
+#[derive(Debug)]
+pub struct Nodes(Vec<Vec<u8>>);
+
+impl Nodes {
+    fn new(leaf_count: usize) -> Self {
+        Self(vec![vec![]; leaf_count * 2])
+    }
+
+    fn at(&self, index: NodeIndex) -> &Vec<u8> {
+        &self.0[index.inner()]
+    }
+
+    fn set_at(&mut self, index: NodeIndex, data: &[u8]) {
+        self.0[index.inner()] = data.to_vec();
+    }
+
+    fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
 
 #[derive(Debug)]
 pub struct MerkleTree<Hasher>
 where
     Hasher: Fn(&[u8]) -> Vec<u8>,
 {
-    nodes: Vec<Vec<u8>>,
+    nodes: Nodes,
     hasher: Hasher,
 }
 
@@ -26,7 +50,7 @@ where
         );
 
         Self {
-            nodes: vec![vec![]; leaf_count * 2],
+            nodes: Nodes::new(leaf_count),
             hasher,
         }
     }
@@ -44,52 +68,60 @@ where
     }
 
     pub fn root(&self) -> &Vec<u8> {
-        &self.nodes[1]
+        self.nodes.at(NodeIndex::new(1))
     }
 
     pub fn len(&self) -> usize {
         self.nodes.len() / 2
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.nodes.is_empty()
+    }
+
     pub fn set_at(&mut self, item_index: usize, item: &[u8]) {
+        let node_index = self.to_node_index(item_index);
+
         let my_hash = (self.hasher)(item);
-        let node_index = item_index + self.len();
-        self.nodes[node_index] = my_hash.clone();
+        self.nodes.set_at(node_index, my_hash.as_slice());
 
         self.hash_recursive(node_index);
     }
 
-    // TODO: Add NodeIndex type
-    fn hash_recursive(&mut self, node_index: usize) {
-        let current_hash = self.nodes[node_index].clone();
+    fn to_node_index(&self, index: usize) -> NodeIndex {
+        NodeIndex::new(index + self.len())
+    }
+
+    fn hash_recursive(&mut self, node_index: NodeIndex) {
+        let current_hash = self.nodes.at(node_index);
         let sibling = Self::sibling_index(node_index);
-        let sibling_hash = &self.nodes[sibling];
+        let sibling_hash = &self.nodes.at(sibling);
 
         let concat = format!("{}{}", hex::encode(current_hash), hex::encode(sibling_hash));
         let parent_hash = (self.hasher)(concat.as_bytes());
 
         let parent = Self::parent_index(node_index);
-        self.nodes[parent] = parent_hash;
+        self.nodes.set_at(parent, parent_hash.as_slice());
 
-        if parent == 1 {
+        if parent.is_root() {
             return;
         }
         self.hash_recursive(parent)
     }
 
-    pub fn proof(&self, item_index: usize) -> Vec<ProofStep> {
+    pub fn proof(&self, index: usize) -> Vec<ProofStep> {
         let mut proof = vec![];
-        let node_index = item_index + self.len();
+        let node_index = self.to_node_index(index);
         self.proof_recursive(node_index, &mut proof);
         proof
     }
 
-    fn proof_recursive(&self, node_index: usize, proof: &mut Vec<ProofStep>) {
-        if node_index == 1 {
+    fn proof_recursive(&self, node_index: NodeIndex, proof: &mut Vec<ProofStep>) {
+        if node_index.is_root() {
             return;
         }
         proof.push(ProofStep::new(
-            self.nodes[Self::sibling_index(node_index)].clone(),
+            self.nodes.at(Self::sibling_index(node_index)).clone(),
             if Self::is_left(node_index) {
                 Direction::Left
             } else {
@@ -128,23 +160,23 @@ where
         }
     }
 
-    fn parent_index(node_index: usize) -> usize {
+    fn parent_index(node_index: NodeIndex) -> NodeIndex {
         if Self::is_left(node_index) {
-            node_index / 2
+            NodeIndex::new(node_index.inner() / 2)
         } else {
-            (node_index - 1) / 2
+            NodeIndex::new((node_index.inner() - 1) / 2)
         }
     }
 
-    fn sibling_index(node_index: usize) -> usize {
+    fn sibling_index(node_index: NodeIndex) -> NodeIndex {
         if Self::is_left(node_index) {
-            node_index + 1
+            NodeIndex::new(node_index.inner() + 1)
         } else {
-            node_index - 1
+            NodeIndex::new(node_index.inner() - 1)
         }
     }
 
-    fn is_left(node_index: usize) -> bool {
-        node_index % 2 == 0
+    fn is_left(node_index: NodeIndex) -> bool {
+        node_index.inner() % 2 == 0
     }
 }

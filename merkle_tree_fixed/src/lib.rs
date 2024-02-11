@@ -1,10 +1,5 @@
-mod tree;
 mod proof;
-
-use std::{
-    collections::hash_map::DefaultHasher,
-    fmt::Debug,
-    hash::{Hash, Hasher},
-};
+mod tree;
+mod node_index;
 
 pub use tree::MerkleTree;

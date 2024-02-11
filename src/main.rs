@@ -1,10 +1,7 @@
 use std::{
     collections::hash_map::DefaultHasher,
-    fmt::Debug,
     hash::{Hash, Hasher},
 };
-
-use rand::Rng;
 
 use merkle_tree::MerkleTree;
 
