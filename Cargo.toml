@@ -9,3 +9,4 @@ members = ["merkle_tree_fixed"]
 [dependencies]
 rand = "0.8.5"
 merkle_tree = { path = "./merkle_tree_fixed" }
+

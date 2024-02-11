@@ -3,9 +3,18 @@ use std::{
     hash::{Hash, Hasher},
 };
 
+use rand::Rng;
+
 use merkle_tree::MerkleTree;
 
 fn main() {
+    let hasher = |data: &[u8]| {
+        let mut hasher = DefaultHasher::new();
+        data.hash(&mut hasher);
+        hasher.finish().to_be_bytes().into()
+    };
+
+    /*
     let chars = "ABCD";
     chars.chars().for_each(|c| {
         let mut hasher = DefaultHasher::new();
@@ -42,7 +51,6 @@ fn main() {
     let actual_root = MerkleTree::verify(&proof, "X".to_string().as_bytes(), hasher);
     assert_ne!(expected_root, &actual_root);
 
-    /*
     let mt = MerkleTree::from_iter("ABCDEFGH".chars());
     let proof = mt.proof(7);
     let expected_root = mt.root();
@@ -54,16 +62,17 @@ fn main() {
     let expected_root = mt.root();
     let actual_root = MerkleTree::verify(&proof, "Ewelina");
     assert_eq!(expected_root, &actual_root);
+    */
 
     let mut rng = rand::thread_rng();
     let count = 2_usize.pow(20);
-    let integers: Vec<_> = std::iter::repeat_with(|| rng.gen::<u128>())
-        .take(count)
-        .collect();
-    let mt = MerkleTree::from_iter(integers.iter());
-    let proof = mt.proof(12345);
-    let expected_root = mt.root();
-    let actual_root = MerkleTree::verify(&proof, integers[12345]);
-    assert_eq!(expected_root, &actual_root);
-    */
+    let integers: Vec<Vec<u8>> =
+        std::iter::repeat_with(|| rng.gen::<u128>().to_be_bytes().into_iter().collect())
+            .take(count)
+            .collect();
+    let mt = MerkleTree::from_iter(integers.iter().map(|x| x.as_slice()), hasher);
+    let _proof = mt.proof(12345);
+    // let expected_root = mt.root();
+    // let actual_root = MerkleTree::verify(&proof, integers[12345], hahser);
+    // assert_eq!(expected_root, &actual_root);
 }

@@ -10,7 +10,7 @@ pub struct Nodes(Vec<Vec<u8>>);
 
 impl Nodes {
     fn new(leaf_count: usize) -> Self {
-        Self(vec![vec![]; leaf_count * 2])
+        Self(vec![vec![0u8]; leaf_count * 2])
     }
 
     fn at(&self, index: NodeIndex) -> &Vec<u8> {
@@ -100,10 +100,12 @@ where
         let current_hash = self.nodes.at(node_index);
         let sibling = Self::sibling_index(node_index);
         let sibling_hash = &self.nodes.at(sibling);
-
-        let concat = Self::concat(current_hash, sibling_hash);
+        let concat = if Self::is_left(node_index) {
+            Self::concat(current_hash, sibling_hash)
+        } else {
+            Self::concat(sibling_hash, current_hash)
+        };
         let parent_hash = (self.hasher)(&concat);
-
         let parent = Self::parent_index(node_index);
         self.nodes.set_at(parent, &parent_hash);
 
@@ -112,6 +114,11 @@ where
         }
         self.hash_recursive(parent)
     }
+
+    pub fn nodes(&self) -> impl Iterator<Item = &Vec<u8>> {
+        self.nodes.0.iter().skip(1)
+    }
+
     pub fn leaves(&self) -> impl Iterator<Item = &Vec<u8>> {
         self.nodes.0.iter().skip(self.leaf_count())
     }
@@ -187,5 +194,154 @@ where
 
     fn is_left(node_index: NodeIndex) -> bool {
         node_index.inner() % 2 == 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crc::{Crc, CRC_8_DARC};
+
+    use crate::MerkleTree;
+
+    fn hasher(data: &[u8]) -> Vec<u8> {
+        let crc = Crc::<u8>::new(&CRC_8_DARC);
+        let mut digest = crc.digest();
+        digest.update(data);
+        vec![digest.finalize()]
+    }
+
+    #[test]
+    fn should_calculate_root() {
+        let leaves = &[
+            ("Alpha", 0x47),
+            ("Bravo", 0x24),
+            ("Charlie", 0x7E),
+            ("Delta", 0x56),
+            ("Echo", 0xEF),
+            ("Foxtrot", 0x49),
+            ("Golf", 0x12),
+            ("Hotel", 0x04),
+        ];
+
+        const EXPECTED_ROOT: u8 = 0x0B;
+
+        //               0B (EXPECTED_ROOT)
+        //                |
+        //        +-------+-------+
+        //        |               |
+        //       4C              DE
+        //        |               |
+        //    +---+---+       +---+---+
+        //    |       |       |       |
+        //   58      28      00      D5
+        //    |       |       |       |
+        //  +-+-+   +-+-+   +-+-+   +-+-+
+        //  |   |   |   |   |   |   |   |
+        // 47  24  7E  56  EF  49  12  04
+
+        let mt = MerkleTree::from_iter(leaves.iter().map(|(data, _)| data.as_bytes()), hasher);
+
+        let expected_root = vec![EXPECTED_ROOT];
+        let actual_root = mt.root();
+        assert_eq!(&expected_root, actual_root);
+    }
+
+    #[test]
+    fn leaves_populated_in_different_order_should_yield_equal_root() {
+        let mut mt = MerkleTree::new(4, hasher);
+        mt.set_at(0, "A".as_bytes());
+        mt.set_at(1, "B".as_bytes());
+        mt.set_at(2, "C".as_bytes());
+        mt.set_at(3, "D".as_bytes());
+        let root_1 = mt.root();
+
+        let mut mt = MerkleTree::new(4, hasher);
+        mt.set_at(3, "D".as_bytes());
+        mt.set_at(2, "C".as_bytes());
+        mt.set_at(1, "B".as_bytes());
+        mt.set_at(0, "A".as_bytes());
+        let root_2 = mt.root();
+
+        assert_eq!(root_1, root_2);
+
+        let mut mt = MerkleTree::new(4, hasher);
+        mt.set_at(2, "C".as_bytes());
+        mt.set_at(3, "D".as_bytes());
+        mt.set_at(1, "B".as_bytes());
+        mt.set_at(0, "A".as_bytes());
+        let root_3 = mt.root();
+
+        assert_eq!(root_1, root_3);
+    }
+
+    #[test]
+    fn should_return_nodes() {
+        let leaves = &[
+            ("Alpha", 0x47),
+            ("Bravo", 0x24),
+            ("Charlie", 0x7E),
+            ("Delta", 0x56),
+            ("Echo", 0xEF),
+            ("Foxtrot", 0x49),
+            ("Golf", 0x12),
+            ("Hotel", 0x04),
+        ];
+
+        //               0B (EXPECTED_ROOT)
+        //                |
+        //        +-------+-------+
+        //        |               |
+        //       4C              DE
+        //        |               |
+        //    +---+---+       +---+---+
+        //    |       |       |       |
+        //   58      28      00      D5
+        //    |       |       |       |
+        //  +-+-+   +-+-+   +-+-+   +-+-+
+        //  |   |   |   |   |   |   |   |
+        // 47  24  7E  56  EF  49  12  04
+
+        let mt = MerkleTree::from_iter(leaves.iter().map(|(data, _)| data.as_bytes()), hasher);
+
+        let expected_nodes = vec![
+            0x0B, 0x4C, 0xDE, 0x58, 0x28, 0x00, 0xD5, 0x47, 0x24, 0x7E, 0x56, 0xEF, 0x49, 0x12,
+            0x04,
+        ];
+        let actual_nodes: Vec<u8> = mt.nodes().map(|n| *n.first().unwrap()).collect();
+        assert_eq!(expected_nodes, actual_nodes);
+    }
+
+    #[test]
+    fn should_return_leaves() {
+        let leaves = &[
+            ("Alpha", 0x47),
+            ("Bravo", 0x24),
+            ("Charlie", 0x7E),
+            ("Delta", 0x56),
+            ("Echo", 0xEF),
+            ("Foxtrot", 0x49),
+            ("Golf", 0x12),
+            ("Hotel", 0x04),
+        ];
+
+        //               0B (EXPECTED_ROOT)
+        //                |
+        //        +-------+-------+
+        //        |               |
+        //       4C              DE
+        //        |               |
+        //    +---+---+       +---+---+
+        //    |       |       |       |
+        //   58      28      00      D5
+        //    |       |       |       |
+        //  +-+-+   +-+-+   +-+-+   +-+-+
+        //  |   |   |   |   |   |   |   |
+        // 47  24  7E  56  EF  49  12  04
+
+        let mt = MerkleTree::from_iter(leaves.iter().map(|(data, _)| data.as_bytes()), hasher);
+
+        let expected_nodes = vec![0x47, 0x24, 0x7E, 0x56, 0xEF, 0x49, 0x12, 0x04];
+        let actual_nodes: Vec<u8> = mt.leaves().map(|n| *n.first().unwrap()).collect();
+        assert_eq!(expected_nodes, actual_nodes);
     }
 }
