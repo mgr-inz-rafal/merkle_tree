@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 use crate::{
     node_index::NodeIndex,
-    proof::{Direction, Proof, ProofStep},
+    proof::{Location, Proof, ProofStep},
 };
 
 #[derive(Debug)]
@@ -138,9 +138,9 @@ where
         proof.add_step(ProofStep::new(
             self.nodes.at(Self::sibling_index(node_index)).clone(),
             if Self::is_left(node_index) {
-                Direction::Left
+                Location::Right
             } else {
-                Direction::Right
+                Location::Left
             },
         ));
 
@@ -155,8 +155,8 @@ where
 
         for step in proof.iter() {
             let concat = match step.direction() {
-                Direction::Right => Self::concat(&my_hash, step.hash()),
-                Direction::Left => Self::concat(step.hash(), &my_hash),
+                Location::Left => Self::concat(&my_hash, step.hash()),
+                Location::Right => Self::concat(step.hash(), &my_hash),
             };
             my_hash = (hasher)(&concat);
         }
@@ -196,7 +196,10 @@ where
 mod tests {
     use crc::{Crc, CRC_8_DARC};
 
-    use crate::MerkleTree;
+    use crate::{
+        proof::{Location, Proof, ProofStep},
+        MerkleTree,
+    };
 
     fn hasher(data: &[u8]) -> Vec<u8> {
         let crc = Crc::<u8>::new(&CRC_8_DARC);
@@ -282,7 +285,7 @@ mod tests {
             ("Hotel", 0x04),
         ];
 
-        //               0B (EXPECTED_ROOT)
+        //               0B
         //                |
         //        +-------+-------+
         //        |               |
@@ -319,7 +322,7 @@ mod tests {
             ("Hotel", 0x04),
         ];
 
-        //               0B (EXPECTED_ROOT)
+        //               0B
         //                |
         //        +-------+-------+
         //        |               |
@@ -338,5 +341,149 @@ mod tests {
         let expected_nodes = vec![0x47, 0x24, 0x7E, 0x56, 0xEF, 0x49, 0x12, 0x04];
         let actual_nodes: Vec<u8> = mt.leaves().map(|n| *n.first().unwrap()).collect();
         assert_eq!(expected_nodes, actual_nodes);
+    }
+
+    #[test]
+    fn calculates_node_index_large_tree() {
+        let leaves = &[
+            ("Alpha", 0x47),
+            ("Bravo", 0x24),
+            ("Charlie", 0x7E),
+            ("Delta", 0x56),
+            ("Echo", 0xEF),
+            ("Foxtrot", 0x49),
+            ("Golf", 0x12),
+            ("Hotel", 0x04),
+        ];
+
+        //               0B
+        //                |
+        //        +-------+-------+
+        //        |               |
+        //       4C              DE
+        //        |               |
+        //    +---+---+       +---+---+
+        //    |       |       |       |
+        //   58       28      00      D5
+        //    |       |       |       |
+        //  +-+-+   +-+-+   +-+-+   +-+-+
+        //  |   |   |   |   |   |   |   |
+        // 47  24  7E  56  EF  49  12  04
+
+        let mt = MerkleTree::from_iter(leaves.iter().map(|(data, _)| data.as_bytes()), hasher);
+
+        assert_eq!(mt.to_node_index(0).inner(), 8);
+        assert_eq!(mt.to_node_index(1).inner(), 9);
+        assert_eq!(mt.to_node_index(2).inner(), 10);
+        assert_eq!(mt.to_node_index(3).inner(), 11);
+        assert_eq!(mt.to_node_index(4).inner(), 12);
+        assert_eq!(mt.to_node_index(5).inner(), 13);
+        assert_eq!(mt.to_node_index(6).inner(), 14);
+        assert_eq!(mt.to_node_index(7).inner(), 15);
+    }
+
+    #[test]
+    fn calculates_node_index_small_tree() {
+        let leaves = &[
+            ("Alpha", 0x47),
+            ("Bravo", 0x24),
+            ("Charlie", 0x7E),
+            ("Delta", 0x56),
+        ];
+
+        //       4C
+        //        |
+        //    +---+---+
+        //    |       |
+        //   58       28
+        //    |       |
+        //  +-+-+   +-+-+
+        //  |   |   |   |
+        // 47  24  7E  56
+
+        let mt = MerkleTree::from_iter(leaves.iter().map(|(data, _)| data.as_bytes()), hasher);
+
+        assert_eq!(mt.to_node_index(0).inner(), 4);
+        assert_eq!(mt.to_node_index(1).inner(), 5);
+        assert_eq!(mt.to_node_index(2).inner(), 6);
+        assert_eq!(mt.to_node_index(3).inner(), 7);
+    }
+
+    #[test]
+    fn generates_proof_for_left_leaf() {
+        let leaves = &[
+            ("Alpha", 0x47),
+            ("Bravo", 0x24),
+            ("Charlie", 0x7E),
+            ("Delta", 0x56),
+            ("Echo", 0xEF),
+            ("Foxtrot", 0x49),
+            ("Golf", 0x12),
+            ("Hotel", 0x04),
+        ];
+
+        //               0B
+        //                |
+        //        +-------+-------+
+        //        |               |
+        //       4C             [DE]
+        //        |               |
+        //    +---+---+       +---+---+
+        //    |       |       |       |
+        //  [58]      28      00      D5
+        //    |       |       |       |
+        //  +-+-+   +-+-+   +-+-+   +-+-+
+        //  |   |   |   |   |   |   |   |
+        // 47  24 [7E] 56  EF  49  12  04
+        //              |
+        //              + prooving this
+
+        let mt = MerkleTree::from_iter(leaves.iter().map(|(data, _)| data.as_bytes()), hasher);
+
+        let actual_proof = mt.proof(3);
+        let mut expected_proof = Proof::new(mt.leaf_count());
+        expected_proof.add_step(ProofStep::new(vec![0x7E], Location::Left));
+        expected_proof.add_step(ProofStep::new(vec![0x58], Location::Left));
+        expected_proof.add_step(ProofStep::new(vec![0xDE], Location::Right));
+        assert_eq!(expected_proof, actual_proof);
+    }
+
+    #[test]
+    fn generates_proof_for_right_leaf() {
+        let leaves = &[
+            ("Alpha", 0x47),
+            ("Bravo", 0x24),
+            ("Charlie", 0x7E),
+            ("Delta", 0x56),
+            ("Echo", 0xEF),
+            ("Foxtrot", 0x49),
+            ("Golf", 0x12),
+            ("Hotel", 0x04),
+        ];
+
+        //               0B
+        //                |
+        //        +-------+-------+
+        //        |               |
+        //      [4C]             DE
+        //        |               |
+        //    +---+---+       +---+---+
+        //    |       |       |       |
+        //   58       28     [00]     D5
+        //    |       |       |       |
+        //  +-+-+   +-+-+   +-+-+   +-+-+
+        //  |   |   |   |   |   |   |   |
+        // 47  24  7E  56  EF  49 [12] 04
+        //                             |
+        //                             + prooving this
+
+        let mt = MerkleTree::from_iter(leaves.iter().map(|(data, _)| data.as_bytes()), hasher);
+
+        let actual_proof = mt.proof(7);
+        let mut expected_proof = Proof::new(mt.leaf_count());
+        expected_proof.add_step(ProofStep::new(vec![0x12], Location::Left));
+        expected_proof.add_step(ProofStep::new(vec![0x00], Location::Left));
+        expected_proof.add_step(ProofStep::new(vec![0x4C], Location::Left));
+        assert_eq!(expected_proof, actual_proof);
     }
 }

@@ -1,21 +1,21 @@
-#[derive(Debug)]
-pub enum Direction {
-    Left,
+#[derive(Debug, PartialEq)]
+pub enum Location {
     Right,
+    Left,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ProofStep {
     hash: Vec<u8>,
-    direction: Direction,
+    direction: Location,
 }
 
 impl ProofStep {
-    pub fn new(hash: Vec<u8>, direction: Direction) -> Self {
+    pub fn new(hash: Vec<u8>, direction: Location) -> Self {
         Self { hash, direction }
     }
 
-    pub fn direction(&self) -> &Direction {
+    pub fn direction(&self) -> &Location {
         &self.direction
     }
 
@@ -24,7 +24,7 @@ impl ProofStep {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Proof(Vec<ProofStep>);
 
 impl Proof {
