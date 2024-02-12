@@ -155,8 +155,8 @@ where
 
         for step in proof.iter() {
             let concat = match step.direction() {
-                Location::Left => Self::concat(&my_hash, step.hash()),
-                Location::Right => Self::concat(step.hash(), &my_hash),
+                Location::Right => Self::concat(&my_hash, step.hash()),
+                Location::Left => Self::concat(step.hash(), &my_hash),
             };
             my_hash = (hasher)(&concat);
         }
@@ -485,5 +485,58 @@ mod tests {
         expected_proof.add_step(ProofStep::new(vec![0x00], Location::Left));
         expected_proof.add_step(ProofStep::new(vec![0x4C], Location::Left));
         assert_eq!(expected_proof, actual_proof);
+    }
+
+    #[test]
+    fn verifies_proof() {
+        let leaves = &[
+            ("Alpha", 0x47),
+            ("Bravo", 0x24),
+            ("Charlie", 0x7E),
+            ("Delta", 0x56),
+            ("Echo", 0xEF),
+            ("Foxtrot", 0x49),
+            ("Golf", 0x12),
+            ("Hotel", 0x04),
+        ];
+
+        //               0B
+        //                |
+        //        +-------+-------+
+        //        |               |
+        //       4C              DE
+        //        |               |
+        //    +---+---+       +---+---+
+        //    |       |       |       |
+        //   58       28      00      D5
+        //    |       |       |       |
+        //  +-+-+   +-+-+   +-+-+   +-+-+
+        //  |   |   |   |   |   |   |   |
+        // 47  24  7E  56  EF  49  12  04
+
+        let mt = MerkleTree::from_iter(leaves.iter().map(|(data, _)| data.as_bytes()), hasher);
+
+        let expected_root = vec![0x0B];
+
+        let proof = mt.proof(0);
+        let actual_root = MerkleTree::verify(&proof, "Alpha".as_bytes(), hasher);
+        assert_eq!(expected_root, actual_root);
+
+        let actual_root = MerkleTree::verify(&proof, "Bravo".as_bytes(), hasher);
+        assert_ne!(expected_root, actual_root);
+        let actual_root = MerkleTree::verify(&proof, "Charlie".as_bytes(), hasher);
+        assert_ne!(expected_root, actual_root);
+        let actual_root = MerkleTree::verify(&proof, "Delta".as_bytes(), hasher);
+        assert_ne!(expected_root, actual_root);
+        let actual_root = MerkleTree::verify(&proof, "Echo".as_bytes(), hasher);
+        assert_ne!(expected_root, actual_root);
+        let actual_root = MerkleTree::verify(&proof, "Foxtrot".as_bytes(), hasher);
+        assert_ne!(expected_root, actual_root);
+        let actual_root = MerkleTree::verify(&proof, "Golf".as_bytes(), hasher);
+        assert_ne!(expected_root, actual_root);
+        let actual_root = MerkleTree::verify(&proof, "Hotel".as_bytes(), hasher);
+        assert_ne!(expected_root, actual_root);
+        let actual_root = MerkleTree::verify(&proof, "XXXXXXXXXXXXXXXXXXXXX".as_bytes(), hasher);
+        assert_ne!(expected_root, actual_root);
     }
 }
